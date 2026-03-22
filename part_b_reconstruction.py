@@ -61,7 +61,7 @@ def process_stereo_uncalibrated(imgL_path, imgR_path):
     stereo = cv2.StereoSGBM_create(
         minDisparity=0,
         numDisparities=64, # Có thể tăng lên 80, 96 nếu vật thể gần
-        blockSize=window_size,
+        blockSize=11,
         P1=8 * 3 * window_size ** 2,
         P2=32 * 3 * window_size ** 2,
         disp12MaxDiff=1,
@@ -110,4 +110,4 @@ def process_stereo_uncalibrated(imgL_path, imgR_path):
 
 # --- Chạy hàm ---
 
-process_stereo_uncalibrated('/workspaces/Traditional-Image-Processing-for-Filtering-3D-Reconstruction-and-Image-Stitching/a.jpg', '/workspaces/Traditional-Image-Processing-for-Filtering-3D-Reconstruction-and-Image-Stitching/b.jpg')
+process_stereo_uncalibrated('/content/1a.jpg', '/content/2a.jpg')
