@@ -53,6 +53,24 @@ def process_part_a(image_path):
 
     plt.tight_layout()
     plt.show()
+    return original, noisy_img, mean_filtered, gaussian_filtered, median_filtered
 
 if __name__ == "__main__":
-    process_part_a("/workspaces/Traditional-Image-Processing-for-Filtering-3D-Reconstruction-and-Image-Stitching/1.jpg")
+    original, noisy_img, mean_filtered, gaussian_filtered, median_filtered = process_part_a("//content/1.jpg")
+    # Tính PSNR để so sánh khả năng khử nhiễu
+    print("\n--- KẾT QUẢ ĐÁNH GIÁ ĐỊNH LƯỢNG (PSNR) ---")
+
+    # Hàm cv2.PSNR có sẵn của OpenCV giúp tính toán rất nhanh
+    psnr_noisy = cv2.PSNR(original, noisy_img)
+    print(f"1. Ảnh nhiễu (chưa lọc) so với ảnh gốc: {psnr_noisy:.2f} dB")
+
+    psnr_mean = cv2.PSNR(original, mean_filtered)
+    print(f"2. Mean Filter: {psnr_mean:.2f} dB")
+
+    psnr_gaussian = cv2.PSNR(original, gaussian_filtered)
+    print(f"3. Gaussian Filter: {psnr_gaussian:.2f} dB")
+
+    psnr_median = cv2.PSNR(original, median_filtered)
+    print(f"4. Median Filter: {psnr_median:.2f} dB")
+
+
