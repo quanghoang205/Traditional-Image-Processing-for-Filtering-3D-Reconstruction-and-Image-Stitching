@@ -30,18 +30,27 @@ def find_matches_and_homography(img1, img2):
     img_matches = cv2.drawMatches(img1, kp1, img2, kp2, good_matches, None,
                                   flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
-    # 3. Tính Homography bằng RANSAC
+   # 3. Tính Homography bằng RANSAC
     MIN_MATCH_COUNT = 10
     if len(good_matches) > MIN_MATCH_COUNT:
         src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
         dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
 
-        # Lấy ma trận Homography (H) chuyển từ ảnh 2 sang ảnh 1
+        # Lấy ma trận Homography (H) và mask (mặt nạ đánh dấu Inliers/Outliers)
         H, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, 5.0)
+        
+        # --- ĐÁNH GIÁ ĐỊNH LƯỢNG ---
+        total_matches = len(good_matches)
+        # mask là một mảng chứa các số 0 (outlier) và 1 (inlier)
+        # np.sum(mask) sẽ đếm tổng số lượng inlier
+        num_inliers = np.sum(mask) 
+        inlier_ratio = (num_inliers / total_matches) * 100
+        
+        print(f"  + Tổng số điểm SIFT khớp ban đầu: {total_matches}")
+        print(f"  + Số điểm Inliers (sau RANSAC): {num_inliers}")
+        print(f"  + Tỷ lệ Inliers: {inlier_ratio:.2f}%")
+        
         return H, img_matches
-    else:
-        print(f"Không đủ điểm khớp - {len(good_matches)}/{MIN_MATCH_COUNT}")
-        return None, None
 
 def warp_and_blend(img1, img2, H):
     """
@@ -67,7 +76,6 @@ def warp_and_blend(img1, img2, H):
     result = cv2.warpPerspective(img2, Ht.dot(H), (xmax - xmin, ymax - ymin))
 
     # Blend: Chèn ảnh 1 vào đúng vị trí
-    # (Ở đây ta dùng cách ghi đè đơn giản. Em có thể nghiên cứu thêm cv2.addWeighted để blend mượt mép hơn nếu muốn điểm cộng)
     result[t[1]:h1+t[1], t[0]:w1+t[0]] = img1
 
     return result
@@ -116,11 +124,10 @@ def process_stitching_pipeline(image_paths):
     plt.show()
 
 if __name__ == "__main__":
-    # Cập nhật danh sách 4 bức ảnh chụp liên tiếp của em vào đây (từ trái sang phải)
     my_images = [
-        "c.jpg",
-        "d.jpg",
-        "e.jpg",
-        "f.jpg"
+        "/content/c.jpg",
+        "/content/d.jpg",
+        "/content/e.jpg",
+        "/content/f.jpg"
     ]
     process_stitching_pipeline(my_images)
