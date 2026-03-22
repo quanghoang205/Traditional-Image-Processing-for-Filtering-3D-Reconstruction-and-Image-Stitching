@@ -3,8 +3,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+# --- HÀM PHỤ: Vẽ đường cực (Đã sửa lỗi float -> int) ---
+def drawlines(img1, img2, lines, pts1, pts2):
+    r, c = img1.shape
+    img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
+    img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+    for r, pt1, pt2 in zip(lines, pts1, pts2):
+        color = tuple(np.random.randint(0, 255, 3).tolist())
+        x0, y0 = map(int, [0, -r[2]/r[1] ])
+        x1, y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
+        img1 = cv2.line(img1, (x0,y0), (x1,y1), color, 1)
+        
+        # Ép kiểu tọa độ tâm (x, y) về số nguyên
+        pt1_int = (int(pt1[0]), int(pt1[1]))
+        pt2_int = (int(pt2[0]), int(pt2[1]))
+        
+        img1 = cv2.circle(img1, pt1_int, 5, color, -1)
+        img2 = cv2.circle(img2, pt2_int, 5, color, -1)
+    return img1, img2
+# ------------------------------------------------------
+
 def process_stereo_uncalibrated(imgL_path, imgR_path):
-    # 1. Đọc ảnh và giảm kích thước để chạy nhanh hơn trên Colab
+    # 1. Đọc ảnh và giảm kích thước
     imgL = cv2.imread(imgL_path)
     imgR = cv2.imread(imgR_path)
     if imgL is None or imgR is None:
@@ -35,33 +55,54 @@ def process_stereo_uncalibrated(imgL_path, imgR_path):
             pts2.append(kp2[m.trainIdx].pt)
             pts1.append(kp1[m.queryIdx].pt)
 
-    pts1 = np.int32(pts1)
-    pts2 = np.int32(pts2)
+    pts1 = np.float32(pts1)
+    pts2 = np.float32(pts2)
 
     # 3. Tính Fundamental Matrix (F)
     print("2. Đang tính Fundamental Matrix...")
     F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 3.0, 0.99)
-    pts1 = pts1[mask.ravel() == 1]
-    pts2 = pts2[mask.ravel() == 1]
+    pts1_in = pts1[mask.ravel() == 1]
+    pts2_in = pts2[mask.ravel() == 1]
+
+    # --- 3.5 Vẽ Epipolar Lines ---
+    print("3. Đang vẽ Epipolar Lines...")
+    # Lấy ngẫu nhiên 15 điểm để vẽ cho đỡ rối mắt
+    idx = np.random.choice(len(pts1_in), min(15, len(pts1_in)), replace=False)
+    pts1_sample = pts1_in[idx]
+    pts2_sample = pts2_in[idx]
+
+    lines1 = cv2.computeCorrespondEpilines(pts2_sample.reshape(-1, 1, 2), 2, F).reshape(-1, 3)
+    img5, _ = drawlines(grayL, grayR, lines1, pts1_sample, pts2_sample)
+    
+    lines2 = cv2.computeCorrespondEpilines(pts1_sample.reshape(-1, 1, 2), 1, F).reshape(-1, 3)
+    img3, _ = drawlines(grayR, grayL, lines2, pts2_sample, pts1_sample)
+
+    plt.figure(figsize=(15, 5))
+    plt.subplot(121), plt.imshow(cv2.cvtColor(img5, cv2.COLOR_BGR2RGB))
+    plt.title('Epipolar Lines (Left Image)')
+    plt.axis('off')
+    plt.subplot(122), plt.imshow(cv2.cvtColor(img3, cv2.COLOR_BGR2RGB))
+    plt.title('Epipolar Lines (Right Image)')
+    plt.axis('off')
+    plt.show()
 
     # 4. Stereo Rectification (Nắn chỉnh ảnh)
-    print("3. Đang nắn chỉnh ảnh (Rectification) để căn bằng các đường cực...")
+    print("4. Đang nắn chỉnh ảnh (Rectification) để căn bằng các đường cực...")
     h, w = grayL.shape
-    _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1, pts2, F, (w, h))
+    _, H1, H2 = cv2.stereoRectifyUncalibrated(pts1_in, pts2_in, F, (w, h))
 
-    # Warp (bóp méo) ảnh theo ma trận H1, H2 để chúng thẳng hàng ngang
     rectifiedL = cv2.warpPerspective(imgL, H1, (w, h))
     rectifiedR = cv2.warpPerspective(imgR, H2, (w, h))
     rectifiedL_gray = cv2.cvtColor(rectifiedL, cv2.COLOR_BGR2GRAY)
     rectifiedR_gray = cv2.cvtColor(rectifiedR, cv2.COLOR_BGR2GRAY)
 
     # 5. Tính Disparity Map trên ảnh đã nắn chỉnh
-    print("4. Đang tính Disparity Map bằng SGBM...")
+    print("5. Đang tính Disparity Map bằng SGBM...")
     window_size = 5
     stereo = cv2.StereoSGBM_create(
         minDisparity=0,
-        numDisparities=64, # Có thể tăng lên 80, 96 nếu vật thể gần
-        blockSize=11,
+        numDisparities=64,
+        blockSize=window_size,
         P1=8 * 3 * window_size ** 2,
         P2=32 * 3 * window_size ** 2,
         disp12MaxDiff=1,
@@ -80,8 +121,8 @@ def process_stereo_uncalibrated(imgL_path, imgR_path):
     plt.show()
 
     # 6. Tái tạo 3D và hiển thị bằng Plotly trên Colab
-    print("5. Đang tái tạo 3D Point Cloud...")
-    focal_length = 0.8 * w
+    print("6. Đang tái tạo 3D Point Cloud...")
+    focal_length = 0.8 * w 
     Q = np.float32([[1, 0, 0, -w / 2.0],
                     [0, -1, 0,  h / 2.0],
                     [0, 0, 0, -focal_length],
@@ -94,9 +135,9 @@ def process_stereo_uncalibrated(imgL_path, imgR_path):
     out_points = points_3D[mask_3d]
     out_colors = colors[mask_3d]
 
-    # Vẽ 3D trên Colab bằng Plotly (lấy mẫu giảm số điểm để tránh đơ trình duyệt)
-    print("6. Đang vẽ biểu đồ 3D tương tác...")
-    sample_rate = 1 # Chỉ lấy 1/15 số điểm ảnh để render cho nhẹ
+    # Vẽ 3D trên Colab bằng Plotly
+    print("7. Đang vẽ biểu đồ 3D tương tác...")
+    sample_rate = 5 # Lấy 1/5 số điểm để trình duyệt không bị đơ
     fig = go.Figure(data=[go.Scatter3d(
         x=out_points[::sample_rate, 0],
         y=out_points[::sample_rate, 1],
@@ -109,5 +150,5 @@ def process_stereo_uncalibrated(imgL_path, imgR_path):
     fig.show()
 
 # --- Chạy hàm ---
-
-process_stereo_uncalibrated('/content/1a.jpg', '/content/2a.jpg')
+# Cập nhật ảnh có chứa tờ báo (1a.jpg, 2a.jpg) vào đây
+process_stereo_uncalibrated('/content/im2.png', '/content/im6.png')
