@@ -2,7 +2,6 @@
 ===================================================================
 HỆ THỐNG TÁI TẠO 3D TỪ ẢNH STEREO CHƯA HIỆU CHỈNH
 ===================================================================
-Tác giả  : 3D Reconstruction Pipeline
 Thư viện : OpenCV, Open3D, NumPy
 Mô tả    : Tái tạo đám mây điểm 3D có màu từ cặp ảnh stereo
            sử dụng SIFT + FLANN + RANSAC + SGBM + Open3D
